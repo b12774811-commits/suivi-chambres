@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Suivi entretien des chambres</title>
+
+<!-- ====================================================== -->
+<!-- CONFIGURATION FIREBASE — à remplacer par vos propres    -->
+<!-- valeurs (voir instructions fournies séparément).         -->
+<!-- ====================================================== -->
+<script>
+  window.FIREBASE_CONFIG = {
+    apiKey: "AIzaSyASBpgjIEzzk-AdGI1dM5fA_X7QbhtHfns",
+    authDomain: "suivihotel.firebaseapp.com",
+    projectId: "suivihotel",
+    storageBucket: "suivihotel.firebasestorage.app",
+    messagingSenderId: "59630101636",
+    appId: "1:59630101636:web:8d063a7f3f2adc83224ed1"
+  };
+</script>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+
+<style>
+:root{
+  --bg:#f5f4f0; --card:#ffffff; --border:#e2e0d8; --text:#1f1e1c; --text2:#6b6a63;
+  --sale-bg:#FAECE7; --sale-tx:#4A1B0C;
+  --nett-bg:#FAEEDA; --nett-tx:#412402;
+  --propre-bg:#EAF3DE; --propre-tx:#173404;
+  --insp-bg:#E1F5EE; --insp-tx:#04342C;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#1c1b19; --card:#26251f; --border:#3a3830; --text:#f0efe8; --text2:#a8a69c;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#1c1b19; --card:#26251f; --border:#3a3830; --text:#f0efe8; --text2:#a8a69c;
+}
+*{box-sizing:border-box;}
+body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--text);}
+.wrap{max-width:900px;margin:0 auto;padding:16px;}
+h1{font-size:20px;font-weight:500;margin:0 0 4px;}
+.sub{font-size:13px;color:var(--text2);margin:0 0 16px;}
+.tabs{display:flex;gap:8px;margin-bottom:16px;}
+.tab{flex:1;padding:10px;text-align:center;border:1px solid var(--border);border-radius:8px;background:var(--card);cursor:pointer;font-size:14px;color:var(--text);}
+.tab.active{border-color:#888;font-weight:500;}
+.view{display:none;}
+.view.active{display:block;}
+.select-room{width:100%;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:15px;margin-bottom:16px;}
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px;text-align:center;}
+.room-name{font-size:22px;font-weight:500;margin-bottom:8px;}
+.badge{display:inline-block;padding:5px 14px;border-radius:8px;font-size:13px;font-weight:500;margin-bottom:20px;}
+.badge.sale{background:var(--sale-bg);color:var(--sale-tx);}
+.badge.nettoyage{background:var(--nett-bg);color:var(--nett-tx);}
+.badge.propre{background:var(--propre-bg);color:var(--propre-tx);}
+.badge.inspectee{background:var(--insp-bg);color:var(--insp-tx);}
+.btn-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px;}
+button.status-btn{padding:12px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:14px;cursor:pointer;}
+button.status-btn:active{transform:scale(0.98);}
+textarea{width:100%;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:14px;resize:vertical;min-height:60px;font-family:inherit;}
+.note-label{font-size:13px;color:var(--text2);display:block;text-align:left;margin:8px 0 4px;}
+.save-note{margin-top:8px;padding:8px 14px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);cursor:pointer;font-size:13px;}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;}
+.room-card{border-radius:10px;padding:12px;cursor:default;}
+.room-num{font-weight:500;font-size:15px;}
+.room-status{font-size:12px;margin-top:2px;}
+.room-note{font-size:11px;margin-top:6px;opacity:0.85;}
+.room-time{font-size:10px;margin-top:4px;opacity:0.7;}
+.legend{display:flex;gap:12px;flex-wrap:wrap;margin:12px 0;font-size:12px;color:var(--text2);}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px;vertical-align:middle;}
+.addroom{display:flex;gap:8px;margin-top:16px;}
+.addroom input{flex:1;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:14px;}
+.addroom button{padding:10px 14px;border-radius:8px;border:1px solid var(--border);background:var(--card);color:var(--text);cursor:pointer;}
+.hint{font-size:12px;color:var(--text2);margin-top:16px;}
+.stat-row{display:flex;gap:8px;margin-bottom:16px;}
+.stat{flex:1;background:var(--card);border-radius:10px;padding:10px;text-align:center;}
+.stat-num{font-size:20px;font-weight:500;}
+.stat-label{font-size:11px;color:var(--text2);}
+.gate{max-width:420px;margin:60px auto;text-align:center;}
+.gate h1{font-size:22px;margin-bottom:4px;}
+.gate p{color:var(--text2);font-size:14px;margin-bottom:24px;}
+.role-btn{display:block;width:100%;padding:16px;margin-bottom:12px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:16px;cursor:pointer;}
+.role-btn small{display:block;color:var(--text2);font-size:12px;margin-top:2px;}
+.hotel-name-row{display:flex;align-items:center;gap:8px;margin-bottom:2px;}
+.edit-link{font-size:12px;color:var(--text2);text-decoration:underline;cursor:pointer;background:none;border:none;padding:0;}
+.switch-role{font-size:12px;color:var(--text2);text-decoration:underline;cursor:pointer;background:none;border:none;padding:0;margin-top:8px;display:inline-block;}
+.config-warning{background:#FAECE7;color:#4A1B0C;padding:12px;border-radius:8px;font-size:13px;margin-bottom:16px;}
+</style>
+</head>
+<body>
+<div class="wrap" id="config-warning-wrap"></div>
+
+<div class="wrap" id="gate-screen">
+  <div class="gate">
+    <h1 id="gate-hotel-name">Suivi entretien des chambres</h1>
+    <p>Choisissez votre profil pour continuer</p>
+    <button class="role-btn" id="btn-role-staff">Femme de ménage<small>Changer le statut des chambres</small></button>
+    <button class="role-btn" id="btn-role-front">Réception<small>Vue d'ensemble de l'hôtel</small></button>
+    <br>
+    <button class="edit-link" id="edit-hotel-name">Modifier le nom de l'hôtel</button>
+  </div>
+</div>
+
+<div class="wrap" id="main-screen" style="display:none;">
+  <div class="hotel-name-row">
+    <h1 id="main-hotel-name">Suivi entretien des chambres</h1>
+  </div>
+  <p class="sub" id="sub-status">Chargement...</p>
+  <button class="switch-role" id="switch-role-btn">Changer de profil</button>
+
+  <div class="tabs">
+    <div class="tab active" id="tab-staff">Femme de ménage</div>
+    <div class="tab" id="tab-front">Réception</div>
+  </div>
+
+  <div class="view active" id="view-staff">
+    <select class="select-room" id="room-select"></select>
+    <div class="card">
+      <div class="room-name" id="staff-room-name">-</div>
+      <div id="staff-badge"></div>
+      <div class="btn-grid">
+        <button class="status-btn" data-status="sale">Sale</button>
+        <button class="status-btn" data-status="nettoyage">En nettoyage</button>
+        <button class="status-btn" data-status="propre">Propre</button>
+        <button class="status-btn" data-status="inspectee">Inspectée</button>
+      </div>
+      <label class="note-label" for="note-input">Note (dégât, objet oublié...)</label>
+      <textarea id="note-input" placeholder="Ex : robinet qui fuit, serviette manquante..."></textarea>
+      <br>
+      <button class="save-note" id="save-note-btn">Enregistrer la note</button>
+      <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border);">
+        <label class="note-label">Ou message vocal</label>
+        <button class="save-note" id="voice-btn">🎤 Enregistrer un vocal</button>
+        <span id="voice-timer" style="font-size:12px;color:var(--text2);margin-left:8px;"></span>
+        <div id="voice-player-wrap" style="margin-top:8px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="view" id="view-front">
+    <div class="stat-row" id="stat-row"></div>
+    <div class="legend">
+      <span><span class="dot" style="background:#F0997B;"></span>Sale</span>
+      <span><span class="dot" style="background:#EF9F27;"></span>En nettoyage</span>
+      <span><span class="dot" style="background:#97C459;"></span>Propre</span>
+      <span><span class="dot" style="background:#5DCAA5;"></span>Inspectée</span>
+    </div>
+    <div class="grid" id="grid"></div>
+    <div class="addroom">
+      <input type="text" id="new-room-input" placeholder="Numéro de chambre, ex 305">
+      <button id="add-room-btn">Ajouter</button>
+    </div>
+    <p class="hint">Les mises à jour sont partagées en temps réel entre tous les appareils ouvrant cette page.</p>
+  </div>
+</div>
+
+<script>
+const STATUSES = {
+  sale: {label:"Sale", cls:"sale"},
+  nettoyage: {label:"En nettoyage", cls:"nettoyage"},
+  propre: {label:"Propre", cls:"propre"},
+  inspectee: {label:"Inspectée", cls:"inspectee"}
+};
+const ROOM_COLORS = {
+  sale: {bg:"#FAECE7", tx:"#4A1B0C"},
+  nettoyage: {bg:"#FAEEDA", tx:"#412402"},
+  propre: {bg:"#EAF3DE", tx:"#173404"},
+  inspectee: {bg:"#E1F5EE", tx:"#04342C"}
+};
+const DEFAULT_ROOMS = ["101","102","103","104","201","202","203","204"];
+
+let firestoreDb = null;
+let rooms = {};
+let selectedRoom = null;
+let hotelName = "Suivi entretien des chambres";
+let currentRole = null;
+let mediaRecorder = null;
+let recordedChunks = [];
+let recordTimerInterval = null;
+let recordStartTime = 0;
+
+function isConfigured(){
+  const c = window.FIREBASE_CONFIG || {};
+  return c.apiKey && c.apiKey.indexOf("VOTRE_") !== 0;
+}
+
+function showGate(){
+  document.getElementById('gate-screen').style.display = 'block';
+  document.getElementById('main-screen').style.display = 'none';
+  currentRole = null;
+}
+
+function showMain(role){
+  currentRole = role;
+  document.getElementById('gate-screen').style.display = 'none';
+  document.getElementById('main-screen').style.display = 'block';
+  switchTab(role === 'front' ? 'front' : 'staff');
+}
+
+function fmtTime(ts){
+  if(!ts) return "";
+  try{
+    const d = new Date(ts);
+    return d.toLocaleString('fr-FR', {day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit'});
+  }catch(e){ return ""; }
+}
+
+function renderSelect(){
+  const sel = document.getElementById('room-select');
+  const nums = Object.keys(rooms).sort();
+  const prev = selectedRoom;
+  sel.innerHTML = "";
+  nums.forEach(n=>{
+    const opt = document.createElement('option');
+    opt.value = n;
+    opt.textContent = "Chambre " + n;
+    sel.appendChild(opt);
+  });
+  if(nums.length){
+    selectedRoom = (prev && nums.includes(prev)) ? prev : nums[0];
+    sel.value = selectedRoom;
+  }
+}
+
+function renderStaffView(){
+  if(!selectedRoom || !rooms[selectedRoom]){
+    document.getElementById('staff-room-name').textContent = "Aucune chambre";
+    document.getElementById('staff-badge').innerHTML = "";
+    return;
+  }
+  const r = rooms[selectedRoom];
+  document.getElementById('staff-room-name').textContent = "Chambre " + selectedRoom;
+  const s = STATUSES[r.status] || STATUSES.sale;
+  document.getElementById('staff-badge').innerHTML = '<div class="badge ' + s.cls + '">' + s.label + '</div>';
+  document.getElementById('note-input').value = r.note || "";
+  const wrap = document.getElementById('voice-player-wrap');
+  wrap.innerHTML = r.voiceData ? '<audio controls style="width:100%;" src="' + r.voiceData + '"></audio>' : "";
+}
+
+function renderFrontView(){
+  const grid = document.getElementById('grid');
+  grid.innerHTML = "";
+  const nums = Object.keys(rooms).sort();
+  const counts = {sale:0, nettoyage:0, propre:0, inspectee:0};
+  nums.forEach(n=>{
+    const r = rooms[n];
+    const status = r.status || "sale";
+    counts[status] = (counts[status]||0) + 1;
+    const c = ROOM_COLORS[status];
+    const div = document.createElement('div');
+    div.className = 'room-card';
+    div.style.background = c.bg;
+    div.style.color = c.tx;
+    let html = '<div class="room-num">Ch. ' + n + '</div>';
+    html += '<div class="room-status">' + (STATUSES[status]||STATUSES.sale).label + '</div>';
+    if(r.note){ html += '<div class="room-note">📝 ' + escapeHtml(r.note) + '</div>'; }
+    if(r.voiceData){ html += '<audio controls style="width:100%;margin-top:6px;height:28px;" src="' + r.voiceData + '"></audio>'; }
+    if(r.updatedAt){ html += '<div class="room-time">' + fmtTime(r.updatedAt) + '</div>'; }
+    div.innerHTML = html;
+    grid.appendChild(div);
+  });
+  const statRow = document.getElementById('stat-row');
+  statRow.innerHTML = "";
+  [["sale","Sales"],["nettoyage","En cours"],["propre","Propres"],["inspectee","Inspectées"]].forEach(([k,label])=>{
+    const div = document.createElement('div');
+    div.className = 'stat';
+    div.innerHTML = '<div class="stat-num">' + (counts[k]||0) + '</div><div class="stat-label">' + label + '</div>';
+    statRow.appendChild(div);
+  });
+}
+
+function escapeHtml(s){
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+async function seedIfEmpty(){
+  try{
+    const snap = await firestoreDb.collection('rooms').limit(1).get();
+    if(snap.empty){
+      for(const num of DEFAULT_ROOMS){
+        await firestoreDb.collection('rooms').doc(num).set({num: num, status: "sale", note: "", updatedAt: Date.now()});
+      }
+    }
+  }catch(e){
+    console.error("seed error", e);
+  }
+}
+
+async function setStatus(status){
+  if(!selectedRoom) return;
+  document.getElementById('sub-status').textContent = "Enregistrement...";
+  try{
+    await firestoreDb.collection('rooms').doc(selectedRoom).set({
+      num: selectedRoom,
+      status: status,
+      note: rooms[selectedRoom] ? (rooms[selectedRoom].note || "") : "",
+      voiceData: rooms[selectedRoom] ? (rooms[selectedRoom].voiceData || "") : "",
+      updatedAt: Date.now()
+    });
+    document.getElementById('sub-status').textContent = "Connecté — synchronisation en temps réel";
+  }catch(e){
+    console.error(e);
+    document.getElementById('sub-status').textContent = "Erreur d'enregistrement, réessayez.";
+  }
+}
+
+async function saveNote(){
+  if(!selectedRoom) return;
+  const note = document.getElementById('note-input').value;
+  try{
+    await firestoreDb.collection('rooms').doc(selectedRoom).set({
+      num: selectedRoom,
+      status: rooms[selectedRoom] ? (rooms[selectedRoom].status || "sale") : "sale",
+      note: note,
+      voiceData: rooms[selectedRoom] ? (rooms[selectedRoom].voiceData || "") : "",
+      updatedAt: Date.now()
+    });
+  }catch(e){
+    console.error(e);
+  }
+}
+
+async function saveVoice(blob){
+  if(!selectedRoom) return;
+  document.getElementById('sub-status').textContent = "Envoi du vocal...";
+  try{
+    const dataUrl = await new Promise((resolve, reject)=>{
+      const reader = new FileReader();
+      reader.onload = ()=> resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+    await firestoreDb.collection('rooms').doc(selectedRoom).set({
+      num: selectedRoom,
+      status: rooms[selectedRoom] ? (rooms[selectedRoom].status || "sale") : "sale",
+      note: rooms[selectedRoom] ? (rooms[selectedRoom].note || "") : "",
+      voiceData: dataUrl,
+      updatedAt: Date.now()
+    });
+    document.getElementById('sub-status').textContent = "Connecté — synchronisation en temps réel";
+  }catch(e){
+    console.error(e);
+    document.getElementById('sub-status').textContent = "Erreur lors de l'envoi du vocal (message trop long ?).";
+  }
+}
+
+async function toggleRecording(){
+  const btn = document.getElementById('voice-btn');
+  if(mediaRecorder && mediaRecorder.state === 'recording'){
+    mediaRecorder.stop();
+    return;
+  }
+  if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+    alert("Le microphone n'est pas accessible sur ce navigateur/appareil.");
+    return;
+  }
+  try{
+    const stream = await navigator.mediaDevices.getUserMedia({audio: true});
+    recordedChunks = [];
+    mediaRecorder = new MediaRecorder(stream);
+    mediaRecorder.ondataavailable = (e)=>{ if(e.data.size>0) recordedChunks.push(e.data); };
+    mediaRecorder.onstop = ()=>{
+      clearInterval(recordTimerInterval);
+      document.getElementById('voice-timer').textContent = "";
+      btn.textContent = "🎤 Enregistrer un vocal";
+      stream.getTracks().forEach(t=>t.stop());
+      const blob = new Blob(recordedChunks, {type: 'audio/webm'});
+      saveVoice(blob);
+    };
+    mediaRecorder.start();
+    btn.textContent = "⏹ Arrêter l'enregistrement";
+    recordStartTime = Date.now();
+    recordTimerInterval = setInterval(()=>{
+      const secs = Math.floor((Date.now()-recordStartTime)/1000);
+      document.getElementById('voice-timer').textContent = secs + "s / 45s max";
+      if(secs >= 45 && mediaRecorder.state === 'recording'){ mediaRecorder.stop(); }
+    }, 500);
+  }catch(e){
+    console.error(e);
+    let msg = "Micro non accessible.";
+    if(e && e.name === 'NotAllowedError'){ msg = "Accès au micro refusé. Vérifiez les autorisations du site dans votre navigateur."; }
+    else if(e && e.name === 'NotFoundError'){ msg = "Aucun micro détecté sur cet appareil."; }
+    alert(msg);
+    document.getElementById('sub-status').textContent = msg;
+  }
+}
+
+async function addRoom(){
+  const input = document.getElementById('new-room-input');
+  const num = input.value.trim();
+  if(!num) return;
+  if(rooms[num]){ input.value = ""; return; }
+  try{
+    await firestoreDb.collection('rooms').doc(num).set({num: num, status: "sale", note: "", voiceData: "", updatedAt: Date.now()});
+    input.value = "";
+  }catch(e){
+    console.error(e);
+  }
+}
+
+function applyHotelName(){
+  document.getElementById('gate-hotel-name').textContent = hotelName;
+  document.getElementById('main-hotel-name').textContent = hotelName;
+  document.title = hotelName;
+}
+
+async function editHotelName(){
+  const name = prompt("Nom de l'hôtel :", hotelName === "Suivi entretien des chambres" ? "" : hotelName);
+  if(name === null) return;
+  const trimmed = name.trim();
+  if(!trimmed) return;
+  hotelName = trimmed;
+  applyHotelName();
+  if(firestoreDb){
+    try{
+      await firestoreDb.collection('config').doc('main').set({hotelName: trimmed});
+    }catch(e){ console.error(e); }
+  }
+}
+
+async function loadHotelName(){
+  if(!firestoreDb) return;
+  try{
+    const doc = await firestoreDb.collection('config').doc('main').get();
+    if(doc.exists && doc.data() && doc.data().hotelName){
+      hotelName = doc.data().hotelName;
+      applyHotelName();
+    }
+  }catch(e){ console.error(e); }
+}
+
+function switchTab(tab){
+  document.getElementById('tab-staff').classList.toggle('active', tab==='staff');
+  document.getElementById('tab-front').classList.toggle('active', tab==='front');
+  document.getElementById('view-staff').classList.toggle('active', tab==='staff');
+  document.getElementById('view-front').classList.toggle('active', tab==='front');
+}
+
+document.getElementById('tab-staff').addEventListener('click', ()=>switchTab('staff'));
+document.getElementById('tab-front').addEventListener('click', ()=>switchTab('front'));
+document.getElementById('room-select').addEventListener('change', (e)=>{
+  selectedRoom = e.target.value;
+  renderStaffView();
+});
+document.querySelectorAll('.status-btn').forEach(btn=>{
+  btn.addEventListener('click', ()=> setStatus(btn.getAttribute('data-status')));
+});
+document.getElementById('save-note-btn').addEventListener('click', saveNote);
+document.getElementById('voice-btn').addEventListener('click', toggleRecording);
+document.getElementById('add-room-btn').addEventListener('click', addRoom);
+document.getElementById('edit-hotel-name').addEventListener('click', editHotelName);
+document.getElementById('btn-role-staff').addEventListener('click', ()=>showMain('staff'));
+document.getElementById('btn-role-front').addEventListener('click', ()=>showMain('front'));
+document.getElementById('switch-role-btn').addEventListener('click', showGate);
+
+async function init(){
+  applyHotelName();
+
+  if(!isConfigured()){
+    document.getElementById('config-warning-wrap').innerHTML =
+      '<div class="config-warning">⚠️ Configuration Firebase manquante. Ouvrez ce fichier et remplacez les valeurs VOTRE_... en haut du fichier par celles de votre projet Firebase.</div>';
+    document.getElementById('sub-status').textContent = "Non configuré.";
+    DEFAULT_ROOMS.forEach(n=>{ rooms[n] = {num:n, status:"sale", note:"", voiceData:"", updatedAt: Date.now()}; });
+    renderSelect();
+    renderStaffView();
+    renderFrontView();
+    return;
+  }
+
+  document.getElementById('sub-status').textContent = "Connexion...";
+  try{
+    firebase.initializeApp(window.FIREBASE_CONFIG);
+    firestoreDb = firebase.firestore();
+  }catch(e){
+    console.error(e);
+    document.getElementById('sub-status').textContent = "Erreur de connexion à Firebase.";
+    return;
+  }
+
+  await loadHotelName();
+  await seedIfEmpty();
+  document.getElementById('sub-status').textContent = "Connecté — synchronisation en temps réel";
+
+  firestoreDb.collection('rooms').onSnapshot((snap)=>{
+    const newRooms = {};
+    snap.docs.forEach(d=>{
+      newRooms[d.id] = d.data();
+    });
+    rooms = newRooms;
+    renderSelect();
+    renderStaffView();
+    renderFrontView();
+  }, (err)=>{
+    console.error(err);
+    document.getElementById('sub-status').textContent = "Connexion interrompue.";
+  });
+}
+
+init();
+</script>
+</body>
+</html>
